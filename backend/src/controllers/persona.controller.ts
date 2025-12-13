@@ -1,44 +1,27 @@
 import { Request, Response } from 'express';
-import { supabase } from '../lib/supabase';
+import { PERSONAS } from '../config/personas';
 
-export const getPersonas = async (req: Request, res: Response) => {
-  const user = (req as any).user;
+export const getPersonas = (req: Request, res: Response) => {
+  try {
+    const publicData = PERSONAS.map(p => ({
+      id: p.id,
+      name: p.name,
+      role: p.role,
+      description: p.description,
+      icon: p.icon
+    }));
 
-  const { data, error } = await supabase
-    .from('personas')
-    .select('*')
-    .eq('user_id', user.id) 
-    .order('created_at', { ascending: true });
-
-  if (error) return res.status(400).json({ error: error.message });
-  
-  return res.status(200).json(data);
+    res.status(200).json({
+      success: true,
+      count: publicData.length,
+      data: publicData
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server Error' });
+  }
 };
 
-export const createPersona = async (req: Request, res: Response) => {
-  const user = (req as any).user;
-  const { name, description, system_prompt, icon, voice_id } = req.body;
-
-  if (!name || !system_prompt) {
-    return res.status(400).json({ error: 'Name and System Prompt are required' });
-  }
-
-  const { data, error } = await supabase
-    .from('personas')
-    .insert([
-      {
-        user_id: user.id, 
-        name,
-        description,
-        system_prompt,
-        icon,
-        voice_id
-      }
-    ])
-    .select()
-    .single();
-
-  if (error) return res.status(400).json({ error: error.message });
-
-  return res.status(201).json(data);
+export const createPersona = (req: Request, res: Response) => {
+  res.status(501).json({ message: 'Not implemented yet' });
 };

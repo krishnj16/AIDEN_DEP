@@ -3,6 +3,7 @@ import { getPersonas, createPersona } from '../controllers/persona.controller';
 import { requireAuth } from '../middleware/auth.middleware';
 
 const router = Router();
+
 router.use(requireAuth);
 
 router.get('/', getPersonas);
