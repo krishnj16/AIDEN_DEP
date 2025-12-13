@@ -1,7 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-
+import chatRoutes from './routes/chat.routes';
 import authRoutes from './routes/auth.routes';
 import personaRoutes from './routes/persona.routes'; 
 import { requireAuth } from './middleware/auth.middleware';
@@ -20,6 +20,7 @@ app.get('/health', (req, res) => {
 
 app.use('/auth', authRoutes);
 app.use('/api/personas', personaRoutes); 
+app.use('/api/chats', chatRoutes);
 
 app.get('/api/protected', requireAuth, (req, res) => {
   const user = (req as any).user;
