@@ -177,6 +177,85 @@
 //   }
 // };
 
+// import { PERSONAS } from '../config/personas';
+
+// // Helper to make the actual API call
+// async function callOpenRouter(model: string, messages: any[]) {
+//   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+//     method: 'POST',
+//     headers: {
+//       'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+//       'Content-Type': 'application/json',
+//       'HTTP-Referer': 'http://localhost:3000',
+//       'X-Title': 'AIDEN'
+//     },
+//     body: JSON.stringify({
+//       model,
+//       messages,
+//       temperature: 0.7 
+//     })
+//   });
+
+//   const data = await res.json();
+
+//   if (data.error) {
+//     throw new Error(data.error.message || 'OpenRouter error');
+//   }
+
+//   return data.choices?.[0]?.message?.content;
+// }
+
+// export async function generateAIResponse(
+//   personaId: string,
+//   history: { role: 'user' | 'assistant'; content: string }[],
+//   message: string
+// ): Promise<string> {
+
+//   // 1. SETUP THE PERSONA
+//   const persona = PERSONAS.find(p => p.id === personaId);
+//   const systemInstruction = persona?.systemPrompt 
+//     || `You are ${personaId}. Respond clearly and helpfully.`;
+
+//   const messages = [
+//     { role: 'system', content: systemInstruction },
+//     ...history.map(h => ({
+//       role: h.role === 'assistant' ? 'assistant' : 'user',
+//       content: h.content
+//     })),
+//     { role: 'user', content: message }
+//   ];
+
+//   // 2. THE CASCADE (Triple Fallback System)
+//   try {
+//     // 🟢 OPTION A: The Best (Smart & Fast)
+//     const reply = await callOpenRouter('openai/gpt-4o-mini', messages);
+//     return `[4o-mini] ${reply}`; // 🏷️ Debug Tag
+
+//   } catch (err1) {
+//     console.warn(`[AI] Primary (4o-mini) failed: ${(err1 as Error).message}. Switching to Backup 1...`);
+
+//     try {
+//       // 🟡 OPTION B: The Classic (Reliable)
+//       const reply = await callOpenRouter('openai/gpt-3.5-turbo', messages);
+//       return `[3.5-turbo] ${reply}`; // 🏷️ Debug Tag
+
+//     } catch (err2) {
+//       console.warn(`[AI] Backup 1 (3.5) failed: ${(err2 as Error).message}. Switching to Safety Net...`);
+
+//       try {
+//         // 🔴 OPTION C: The Safety Net (Free & Open Source)
+//         const reply = await callOpenRouter('meta-llama/llama-3-8b-instruct:free', messages);
+//         return `[Llama-3] ${reply}`; // 🏷️ Debug Tag
+        
+//       } catch (err3) {
+//         console.error('[AI] All models failed.', err3);
+//         return "[SYSTEM ERROR] Critical: Unable to connect to any AI models.";
+//       }
+//     }
+//   }
+// }
+
+
 import { PERSONAS } from '../config/personas';
 
 // Helper to make the actual API call
@@ -208,48 +287,67 @@ async function callOpenRouter(model: string, messages: any[]) {
 export async function generateAIResponse(
   personaId: string,
   history: { role: 'user' | 'assistant'; content: string }[],
-  message: string
+  message: string,
+  imageUrl?: string // 👈 NEW: Optional Image
 ): Promise<string> {
 
-  // 1. SETUP THE PERSONA
   const persona = PERSONAS.find(p => p.id === personaId);
   const systemInstruction = persona?.systemPrompt 
     || `You are ${personaId}. Respond clearly and helpfully.`;
 
-  const messages = [
+  // 1. Prepare Standard History (Text Only)
+  const historyFormatted = history.map(h => ({
+    role: h.role === 'assistant' ? 'assistant' : 'user',
+    content: h.content
+  }));
+
+  // 2. Prepare the "Multimodal" User Message
+  let userContent: any = message;
+  if (imageUrl) {
+    userContent = [
+      { type: "text", text: message },
+      { type: "image_url", image_url: { url: imageUrl } }
+    ];
+  }
+
+  // 3. Construct Messages Array (Multimodal version)
+  const messagesMultimodal = [
     { role: 'system', content: systemInstruction },
-    ...history.map(h => ({
-      role: h.role === 'assistant' ? 'assistant' : 'user',
-      content: h.content
-    })),
-    { role: 'user', content: message }
+    ...historyFormatted,
+    { role: 'user', content: userContent }
   ];
 
-  // 2. THE CASCADE (Triple Fallback System)
+  // 4. Construct Messages Array (Text-Only Fallback)
+  // We use this if the Primary fails, so we don't crash the text-only backups
+  const messagesTextOnly = [
+    { role: 'system', content: systemInstruction },
+    ...historyFormatted,
+    { role: 'user', content: message + (imageUrl ? " [Image attachment lost in fallback]" : "") }
+  ];
+
+  // 5. THE CASCADE
   try {
-    // 🟢 OPTION A: The Best (Smart & Fast)
-    const reply = await callOpenRouter('openai/gpt-4o-mini', messages);
-    return `[4o-mini] ${reply}`; // 🏷️ Debug Tag
+    // 🟢 OPTION A: GPT-4o-mini (Supports Images)
+    return await callOpenRouter('openai/gpt-4o-mini', messagesMultimodal);
 
   } catch (err1) {
-    console.warn(`[AI] Primary (4o-mini) failed: ${(err1 as Error).message}. Switching to Backup 1...`);
+    console.warn(`[AI] Primary (4o-mini) failed. Switching to Backup...`);
 
+    // ⚠️ CRITICAL: Switch to 'messagesTextOnly' for backups
     try {
-      // 🟡 OPTION B: The Classic (Reliable)
-      const reply = await callOpenRouter('openai/gpt-3.5-turbo', messages);
-      return `[3.5-turbo] ${reply}`; // 🏷️ Debug Tag
+      // 🟡 OPTION B: GPT-3.5 (Text Only)
+      return await callOpenRouter('openai/gpt-3.5-turbo', messagesTextOnly);
 
     } catch (err2) {
-      console.warn(`[AI] Backup 1 (3.5) failed: ${(err2 as Error).message}. Switching to Safety Net...`);
+      console.warn(`[AI] Backup 1 (3.5) failed. Switching to Safety Net...`);
 
       try {
-        // 🔴 OPTION C: The Safety Net (Free & Open Source)
-        const reply = await callOpenRouter('meta-llama/llama-3-8b-instruct:free', messages);
-        return `[Llama-3] ${reply}`; // 🏷️ Debug Tag
+        // 🔴 OPTION C: Llama 3 (Text Only, Free)
+        return await callOpenRouter('meta-llama/llama-3-8b-instruct:free', messagesTextOnly);
         
       } catch (err3) {
         console.error('[AI] All models failed.', err3);
-        return "[SYSTEM ERROR] Critical: Unable to connect to any AI models.";
+        return "System Critical: Unable to connect to any AI models.";
       }
     }
   }

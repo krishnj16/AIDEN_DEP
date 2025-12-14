@@ -385,94 +385,226 @@
 // };
 
 
+// import { Request, Response } from 'express';
+// import { supabase } from '../lib/supabase';
+// import { PERSONAS } from '../config/personas';
+// import { generateAIResponse } from '../service/ai.service'; 
+
+// // 1. Create a New Session
+// // ✅ CHANGE: 'req: any' allows us to access req.user without errors
+// export const createSession = async (req: any, res: Response) => {
+//   try {
+//     const { personaId } = req.body;
+//     // Now TypeScript won't complain about .user
+//     const userId = req.user?.id; 
+
+//     if (!userId) {
+//         res.status(401).json({ error: 'Unauthorized' });
+//         return;
+//     }
+
+//     // Verify Persona exists in config
+//     const persona = PERSONAS.find((p) => p.id === personaId);
+//     if (!persona) {
+//       res.status(400).json({ error: 'Invalid persona ID' });
+//       return;
+//     }
+
+//     // Insert into DB
+//     const { data, error } = await supabase
+//       .from('chat_sessions')
+//       .insert({
+//         user_id: userId,
+//         persona_id: personaId,
+//         title: `${persona.name} Session`
+//       })
+//       .select()
+//       .single();
+
+//     if (error) throw error;
+
+//     res.status(201).json({ success: true, session: data });
+//   } catch (error) {
+//     console.error('Error creating session:', error);
+//     res.status(500).json({ error: 'Failed to create session' });
+//   }
+// };
+
+// // 2. Get All Sessions for Sidebar
+// // ✅ CHANGE: 'req: any'
+// export const getUserSessions = async (req: any, res: Response) => {
+//   try {
+//     const userId = req.user?.id;
+//     if (!userId) {
+//         res.status(401).json({ error: 'Unauthorized' });
+//         return;
+//     }
+
+//     const { data, error } = await supabase
+//       .from('chat_sessions')
+//       .select('*')
+//       .eq('user_id', userId)
+//       .order('created_at', { ascending: false });
+
+//     if (error) throw error;
+
+//     res.json({ success: true, sessions: data });
+//   } catch (error) {
+//     console.error('Error fetching sessions:', error);
+//     res.status(500).json({ success: false, error: 'Failed to fetch sessions' });
+//   }
+// };
+
+// // 3. Get Messages for a Specific Session
+// // ✅ CHANGE: 'req: any'
+// export const getMessages = async (req: any, res: Response) => {
+//   try {
+//     const { id } = req.params;
+//     const userId = req.user?.id;
+
+//     // Optional: Check if session belongs to user (Security)
+//     const { data: session, error: sessionError } = await supabase
+//         .from('chat_sessions')
+//         .select('id')
+//         .eq('id', id)
+//         .eq('user_id', userId)
+//         .single();
+    
+//     if (sessionError || !session) {
+//         res.status(404).json({ success: false, error: 'Session not found' });
+//         return;
+//     }
+
+//     const { data, error } = await supabase
+//       .from('messages')
+//       .select('*')
+//       .eq('session_id', id)
+//       .order('created_at', { ascending: true });
+
+//     if (error) throw error;
+
+//     res.json({ success: true, data });
+//   } catch (error) {
+//     console.error('Error fetching messages:', error);
+//     res.status(500).json({ success: false, error: 'Failed to fetch messages' });
+//   }
+// };
+
+// // 4. Send Message (with GEMINI AI)
+// // ✅ CHANGE: 'req: any'
+// export const sendMessage = async (req: any, res: Response): Promise<void> => {
+//   try {
+//     const { id } = req.params;
+//     const { content } = req.body;
+//     const userId = req.user?.id;
+
+//     // A. Validate Session
+//     const { data: session, error: sessionError } = await supabase
+//       .from('chat_sessions')
+//       .select('*')
+//       .eq('id', id)
+//       .eq('user_id', userId)
+//       .single();
+
+//     if (sessionError || !session) {
+//       res.status(404).json({ success: false, error: 'Session not found' });
+//       return;
+//     }
+
+//     // B. Save USER Message
+//     const { error: msgError } = await supabase
+//       .from('messages')
+//       .insert({
+//         session_id: id,
+//         role: 'user',
+//         content: content
+//       });
+
+//     if (msgError) throw msgError;
+
+//     // C. Get Context (History)
+//     const { data: historyData } = await supabase
+//       .from('messages')
+//       .select('role, content')
+//       .eq('session_id', id)
+//       .order('created_at', { ascending: true })
+//       .limit(10); 
+
+//     const chatHistory = historyData as { role: 'user' | 'assistant', content: string }[] || [];
+
+//     // D. Generate AI Reply
+//     const aiText = await generateAIResponse(session.persona_id, chatHistory, content);
+
+//     // E. Save AI Message
+//     const { data: aiMsg, error: aiError } = await supabase
+//       .from('messages')
+//       .insert({
+//         session_id: id,
+//         role: 'assistant',
+//         content: aiText
+//       })
+//       .select()
+//       .single();
+
+//     if (aiError) throw aiError;
+
+//     res.json({ success: true, message: aiMsg });
+
+//   } catch (error) {
+//     console.error('Error sending message:', error);
+//     res.status(500).json({ success: false, error: 'Failed to process message' });
+//   }
+// };
+
 import { Request, Response } from 'express';
 import { supabase } from '../lib/supabase';
-import { PERSONAS } from '../config/personas';
-import { generateAIResponse } from '../service/ai.service'; 
+import { generateAIResponse } from '../service/ai.service';
 
-// 1. Create a New Session
-// ✅ CHANGE: 'req: any' allows us to access req.user without errors
+/* =========================================================
+   CREATE CHAT SESSION
+========================================================= */
 export const createSession = async (req: any, res: Response) => {
   try {
     const { personaId } = req.body;
-    // Now TypeScript won't complain about .user
-    const userId = req.user?.id; 
+    const userId = req.user?.id;
 
-    if (!userId) {
-        res.status(401).json({ error: 'Unauthorized' });
-        return;
-    }
-
-    // Verify Persona exists in config
-    const persona = PERSONAS.find((p) => p.id === personaId);
-    if (!persona) {
-      res.status(400).json({ error: 'Invalid persona ID' });
-      return;
-    }
-
-    // Insert into DB
     const { data, error } = await supabase
       .from('chat_sessions')
       .insert({
         user_id: userId,
-        persona_id: personaId,
-        title: `${persona.name} Session`
+        persona_id: personaId
       })
       .select()
       .single();
 
     if (error) throw error;
 
-    res.status(201).json({ success: true, session: data });
+    res.json({ success: true, session: data });
   } catch (error) {
     console.error('Error creating session:', error);
-    res.status(500).json({ error: 'Failed to create session' });
+    res.status(500).json({ success: false, error: 'Failed to create session' });
   }
 };
 
-// 2. Get All Sessions for Sidebar
-// ✅ CHANGE: 'req: any'
-export const getUserSessions = async (req: any, res: Response) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-        res.status(401).json({ error: 'Unauthorized' });
-        return;
-    }
-
-    const { data, error } = await supabase
-      .from('chat_sessions')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-
-    res.json({ success: true, sessions: data });
-  } catch (error) {
-    console.error('Error fetching sessions:', error);
-    res.status(500).json({ success: false, error: 'Failed to fetch sessions' });
-  }
-};
-
-// 3. Get Messages for a Specific Session
-// ✅ CHANGE: 'req: any'
+/* =========================================================
+   GET SESSION MESSAGES
+========================================================= */
 export const getMessages = async (req: any, res: Response) => {
   try {
     const { id } = req.params;
     const userId = req.user?.id;
 
-    // Optional: Check if session belongs to user (Security)
-    const { data: session, error: sessionError } = await supabase
-        .from('chat_sessions')
-        .select('id')
-        .eq('id', id)
-        .eq('user_id', userId)
-        .single();
-    
-    if (sessionError || !session) {
-        res.status(404).json({ success: false, error: 'Session not found' });
-        return;
+    // Validate session ownership
+    const { data: session } = await supabase
+      .from('chat_sessions')
+      .select('id')
+      .eq('id', id)
+      .eq('user_id', userId)
+      .single();
+
+    if (!session) {
+      res.status(404).json({ success: false, error: 'Session not found' });
+      return;
     }
 
     const { data, error } = await supabase
@@ -490,12 +622,35 @@ export const getMessages = async (req: any, res: Response) => {
   }
 };
 
-// 4. Send Message (with GEMINI AI)
-// ✅ CHANGE: 'req: any'
+/* =========================================================
+   GET ALL USER SESSIONS (SIDEBAR)
+========================================================= */
+export const getUserSessions = async (req: any, res: Response) => {
+  try {
+    const userId = req.user?.id;
+
+    const { data, error } = await supabase
+      .from('chat_sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    res.json({ success: true, sessions: data });
+  } catch (error) {
+    console.error('Error fetching sessions:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch sessions' });
+  }
+};
+
+/* =========================================================
+   SEND MESSAGE (TEXT + IMAGE SUPPORT)
+========================================================= */
 export const sendMessage = async (req: any, res: Response): Promise<void> => {
   try {
     const { id } = req.params;
-    const { content } = req.body;
+    const { content, image } = req.body; // 👈 IMAGE SUPPORT
     const userId = req.user?.id;
 
     // A. Validate Session
@@ -511,7 +666,7 @@ export const sendMessage = async (req: any, res: Response): Promise<void> => {
       return;
     }
 
-    // B. Save USER Message
+    // B. Save USER Message (text only for now)
     const { error: msgError } = await supabase
       .from('messages')
       .insert({
@@ -522,18 +677,24 @@ export const sendMessage = async (req: any, res: Response): Promise<void> => {
 
     if (msgError) throw msgError;
 
-    // C. Get Context (History)
+    // C. Fetch Chat History (Context)
     const { data: historyData } = await supabase
       .from('messages')
       .select('role, content')
       .eq('session_id', id)
       .order('created_at', { ascending: true })
-      .limit(10); 
+      .limit(10);
 
-    const chatHistory = historyData as { role: 'user' | 'assistant', content: string }[] || [];
+    const chatHistory =
+      (historyData as { role: 'user' | 'assistant'; content: string }[]) || [];
 
-    // D. Generate AI Reply
-    const aiText = await generateAIResponse(session.persona_id, chatHistory, content);
+    // D. Generate AI Response (PASS IMAGE)
+    const aiText = await generateAIResponse(
+      session.persona_id,
+      chatHistory,
+      content,
+      image
+    );
 
     // E. Save AI Message
     const { data: aiMsg, error: aiError } = await supabase
@@ -552,6 +713,9 @@ export const sendMessage = async (req: any, res: Response): Promise<void> => {
 
   } catch (error) {
     console.error('Error sending message:', error);
-    res.status(500).json({ success: false, error: 'Failed to process message' });
+    res.status(500).json({
+      success: false,
+      error: 'Failed to process message'
+    });
   }
 };
