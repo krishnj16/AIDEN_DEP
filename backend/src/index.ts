@@ -45,6 +45,7 @@ import chatRoutes from './routes/chat.routes';
 import authRoutes from './routes/auth.routes';
 import personaRoutes from './routes/persona.routes'; 
 import { requireAuth } from './middleware/auth.middleware';
+import { memoryService } from './service/memory.service';
 
 dotenv.config();
 
@@ -75,6 +76,11 @@ app.get('/api/protected', requireAuth, (req, res) => {
   res.json({ 
     message: `Hello, ${user.email}. You are authorized.`,
   });
+});
+app.listen(port, async () => { 
+  console.log(`Server running at http://localhost:${port}`);
+  
+  await memoryService.initialize();
 });
 
 app.listen(port, () => {
