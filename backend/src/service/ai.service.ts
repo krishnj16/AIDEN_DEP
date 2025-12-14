@@ -1,0 +1,256 @@
+// import { GoogleGenerativeAI, Content } from "@google/generative-ai";
+// import { PERSONAS } from "../config/personas";
+
+// // Initialize Gemini
+// const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+
+// // ✅ FIX: Use 'gemini-1.5-flash' (It is faster and currently supported)
+// const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+
+// interface ChatMessage {
+//   role: 'user' | 'assistant';
+//   content: string;
+// }
+
+// export const generateAIResponse = async (
+//   personaId: string, 
+//   history: ChatMessage[], 
+//   newMessage: string
+// ): Promise<string> => {
+//   try {
+//     // 1. Find the Persona
+//     const persona = PERSONAS.find(p => p.id === personaId);
+//     if (!persona) throw new Error("Persona not found");
+
+//     // 2. Format History
+//     const formattedHistory: Content[] = history.map(msg => ({
+//       role: msg.role === 'assistant' ? 'model' : 'user',
+//       parts: [{ text: msg.content }],
+//     }));
+
+//     // 3. Start Chat
+//     const chat = model.startChat({
+//       history: formattedHistory,
+//       systemInstruction: {
+//         role: "system",
+//         parts: [{ text: persona.systemPrompt || "You are a helpful AI." }]
+//       }
+//     });
+
+//     // 4. Send Message
+//     const result = await chat.sendMessage(newMessage);
+//     const response = await result.response;
+    
+//     return response.text();
+
+//   } catch (error) {
+//     console.error("Gemini Error:", error);
+//     return "I am having trouble connecting to my neural network. Please try again.";
+//   }
+// };
+
+
+// export async function generateAIResponse(
+//   personaId: string,
+//   history: { role: 'user' | 'assistant'; content: string }[],
+//   message: string
+// ): Promise<string> {
+
+//   const systemPrompt = `
+// You are ${personaId}.
+// You are intelligent, concise, and helpful.
+// Respond clearly and professionally.
+// `;
+
+//   const messages = [
+//     { role: 'system', content: systemPrompt },
+//     ...history.map(h => ({
+//       role: h.role === 'assistant' ? 'assistant' : 'user',
+//       content: h.content
+//     })),
+//     { role: 'user', content: message }
+//   ];
+
+//   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+//     method: 'POST',
+//     headers: {
+//       'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+//       'Content-Type': 'application/json',
+//       'HTTP-Referer': 'http://localhost:3000',
+//       'X-Title': 'AIDEN'
+//     },
+//     body: JSON.stringify({
+//       model: 'openai/gpt-3.5-turbo',
+//       messages,
+//       temperature: 0.6
+//     })
+//   });
+
+//   const data = await res.json();
+
+//   console.log('OpenRouter raw response:', JSON.stringify(data, null, 2));
+
+//   if (data.error) {
+//     throw new Error(data.error.message || 'OpenRouter error');
+//   }
+
+//   const content =
+//     data.choices?.[0]?.message?.content ??
+//     data.choices?.[0]?.text;
+
+//   if (!content) {
+//     throw new Error('Invalid AI response');
+//   }
+
+//   return content;
+// }
+
+
+
+
+
+// import OpenAI from 'openai';
+// import { PERSONAS } from "../config/personas";
+
+// // Initialize OpenRouter (via OpenAI SDK)
+// const openai = new OpenAI({
+//   apiKey: process.env.OPENROUTER_API_KEY,
+//   baseURL: 'https://openrouter.ai/api/v1', 
+//   defaultHeaders: {
+//     'HTTP-Referer': 'http://localhost:8080',
+//     'X-Title': 'AIDEN',
+//   },
+// });
+
+// // Define Model IDs
+// // Option A: The Cutting Edge (Free, Multimodal, Fast)
+// const MODEL_PRIMARY = 'google/gemini-2.0-flash-exp:free';
+
+// // Option B: The Stable Fallback (Cheap/Free, Reliable)
+// // Use this if Option A stops working
+// const MODEL_FALLBACK = 'google/gemini-flash-1.5'; 
+
+// interface ChatMessage {
+//   role: 'user' | 'assistant';
+//   content: string; 
+// }
+
+// export const generateAIResponse = async (
+//   personaId: string, 
+//   history: ChatMessage[], 
+//   newMessage: string
+// ): Promise<string> => {
+//   try {
+//     const persona = PERSONAS.find(p => p.id === personaId);
+//     if (!persona) throw new Error("Persona not found");
+
+//     // 1. Prepare System Prompt
+//     const systemMessage = { 
+//       role: 'system', 
+//       content: persona.systemPrompt || "You are a helpful AI." 
+//     };
+
+//     // 2. Format History
+//     // (Ready for 'content' to be an array of text/images later)
+//     const conversation = history.map(msg => ({ 
+//       role: msg.role as 'user' | 'assistant', 
+//       content: msg.content 
+//     }));
+
+//     // 3. Add User Message
+//     const userMessage = { 
+//       role: 'user', 
+//       content: newMessage 
+//     };
+
+//     // 4. Send to OpenRouter
+//     const completion = await openai.chat.completions.create({
+//       model: MODEL_PRIMARY, 
+//       messages: [systemMessage, ...conversation, userMessage] as any,
+//     });
+
+//     return completion.choices[0]?.message?.content || "I am currently offline.";
+
+//   } catch (error) {
+//     console.error("OpenRouter Error:", error);
+//     return "I am having trouble processing that request. Please try again.";
+//   }
+// };
+
+import { PERSONAS } from '../config/personas';
+
+// Helper to make the actual API call
+async function callOpenRouter(model: string, messages: any[]) {
+  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'http://localhost:3000',
+      'X-Title': 'AIDEN'
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: 0.7 
+    })
+  });
+
+  const data = await res.json();
+
+  if (data.error) {
+    throw new Error(data.error.message || 'OpenRouter error');
+  }
+
+  return data.choices?.[0]?.message?.content;
+}
+
+export async function generateAIResponse(
+  personaId: string,
+  history: { role: 'user' | 'assistant'; content: string }[],
+  message: string
+): Promise<string> {
+
+  // 1. SETUP THE PERSONA
+  const persona = PERSONAS.find(p => p.id === personaId);
+  const systemInstruction = persona?.systemPrompt 
+    || `You are ${personaId}. Respond clearly and helpfully.`;
+
+  const messages = [
+    { role: 'system', content: systemInstruction },
+    ...history.map(h => ({
+      role: h.role === 'assistant' ? 'assistant' : 'user',
+      content: h.content
+    })),
+    { role: 'user', content: message }
+  ];
+
+  // 2. THE CASCADE (Triple Fallback System)
+  try {
+    // 🟢 OPTION A: The Best (Smart & Fast)
+    const reply = await callOpenRouter('openai/gpt-4o-mini', messages);
+    return `[4o-mini] ${reply}`; // 🏷️ Debug Tag
+
+  } catch (err1) {
+    console.warn(`[AI] Primary (4o-mini) failed: ${(err1 as Error).message}. Switching to Backup 1...`);
+
+    try {
+      // 🟡 OPTION B: The Classic (Reliable)
+      const reply = await callOpenRouter('openai/gpt-3.5-turbo', messages);
+      return `[3.5-turbo] ${reply}`; // 🏷️ Debug Tag
+
+    } catch (err2) {
+      console.warn(`[AI] Backup 1 (3.5) failed: ${(err2 as Error).message}. Switching to Safety Net...`);
+
+      try {
+        // 🔴 OPTION C: The Safety Net (Free & Open Source)
+        const reply = await callOpenRouter('meta-llama/llama-3-8b-instruct:free', messages);
+        return `[Llama-3] ${reply}`; // 🏷️ Debug Tag
+        
+      } catch (err3) {
+        console.error('[AI] All models failed.', err3);
+        return "[SYSTEM ERROR] Critical: Unable to connect to any AI models.";
+      }
+    }
+  }
+}

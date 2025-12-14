@@ -12,7 +12,11 @@ const app = express();
 const port = process.env.PORT || 3000;
 
 app.use(cors());
-app.use(express.json()); 
+app.use(express.json());
+app.use(cors({
+  origin: 'http://localhost:8080', 
+  credentials: true 
+})); 
 
 app.get('/health', (req, res) => {
   res.send('AIDEN Backend is Online');
