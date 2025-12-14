@@ -352,6 +352,165 @@
 //     }
 //   }
 // }
+// import OpenAI from 'openai';
+// import { PERSONAS } from "../config/personas";
+// import { memoryService } from './memory.service'; // 👈 Import Memory
+
+// const openai = new OpenAI({
+//   apiKey: process.env.OPENROUTER_API_KEY,
+//   baseURL: 'https://openrouter.ai/api/v1', 
+//   defaultHeaders: {
+//     'HTTP-Referer': 'http://localhost:3000',
+//     'X-Title': 'AIDEN',
+//   },
+// });
+
+// // Helper to make the actual API call
+// // async function callOpenRouter(model: string, messages: any[]) {
+// //   const completion = await openai.chat.completions.create({
+// //     model: model, 
+// //     messages: messages,
+// //   });
+// //   return completion.choices[0]?.message?.content || "";
+// // }
+
+// // export const generateAIResponse = async (
+// //   personaId: string, 
+// //   history: { role: 'user' | 'assistant'; content: string }[], 
+// //   message: string,
+// //   userId: string, // 👈 NEW: We need to know WHO is asking to find THEIR memories
+// //   imageUrl?: string 
+// // ): Promise<string> => {
+  
+// //   const persona = PERSONAS.find(p => p.id === personaId);
+// //   let systemInstruction = persona?.systemPrompt || "You are a helpful AI.";
+
+// //   // 🧠 1. RECALL MEMORIES
+// //   // We search for memories related to the CURRENT message
+// //   try {
+// //     console.log(`[AI] Searching memories for: "${message.slice(0, 20)}..."`);
+// //     const relevantMemories = await memoryService.searchMemories(userId, message);
+
+// //     if (relevantMemories.length > 0) {
+// //       console.log(`[AI] Found ${relevantMemories.length} relevant memories.`);
+// //       const memoryContext = `
+// //       \n[LONG-TERM MEMORY ACTIVE]
+// //       Relevant facts from past conversations:
+// //       - ${relevantMemories.join("\n- ")}
+// //       \n[END MEMORY]
+// //       `;
+// //       // Inject into the system prompt
+// //       systemInstruction += memoryContext;
+// //     }
+// //   } catch (err) {
+// //     console.warn("[AI] Memory retrieval failed (continuing without memory):", err);
+// //   }
+
+// //   // 2. Prepare History
+// //   const historyFormatted = history.map(h => ({
+// //     role: h.role === 'assistant' ? 'assistant' : 'user',
+// //     content: h.content
+// //   }));
+
+// // ... imports ...
+
+// export const generateAIResponse = async (
+//   personaId: string, 
+//   history: { role: 'user' | 'assistant'; content: string }[], 
+//   message: string,
+//   userId: string, 
+//   imageUrl?: string 
+// ): Promise<string> => {
+  
+//   const persona = PERSONAS.find(p => p.id === personaId);
+//   let systemInstruction = persona?.systemPrompt || "You are a helpful AI.";
+
+//   // 🧠 1. RECALL MEMORIES
+//   // We search for memories related to the CURRENT message AND Persona
+//   try {
+//     // ✅ KEY FIX: Passing personaId to search
+//     const relevantMemories = await memoryService.searchMemories(userId, personaId, message);
+
+//     if (relevantMemories.length > 0) {
+//       const memoryContext = `
+//       \n[LONG-TERM MEMORY ACTIVE]
+//       Relevant facts from past conversations with ${persona?.name}:
+//       - ${relevantMemories.join("\n- ")}
+//       \n[END MEMORY]
+//       `;
+//       systemInstruction += memoryContext;
+//     }
+//   } catch (err) {
+//     console.warn("[AI] Memory retrieval failed:", err);
+//   }
+
+//   // ... rest of the function (formatting history, calling OpenAI) ...
+//   // (The rest of your ai.service.ts code remains the same)
+  
+//   // Need the full file? Just keep the part below this unchanged:
+//   const historyFormatted = history.map(h => ({
+//     role: h.role === 'assistant' ? 'assistant' : 'user',
+//     content: h.content
+//   }));
+
+//   // ... (rest of standard AI call logic) ...
+
+//   // TEMPORARY RETURN FOR COMPILATION SAKE IF YOU COPY-PASTE:
+//   // (Paste your existing Triple Threat logic here)
+  
+//   // -- FOR BREVITY, I assume you kept the Triple Threat logic below. 
+//   // If you need the FULL ai.service.ts file again, let me know. --
+  
+//   // ...
+  
+//   // COPY-PASTE FRIENDLY BLOCK END
+//   // 3. Prepare Current Message (Multimodal)
+//   let userContent: any = message;
+//   if (imageUrl) {
+//     userContent = [
+//       { type: "text", text: message },
+//       { type: "image_url", image_url: { url: imageUrl } }
+//     ];
+//   }
+
+//   // 4. Build Message Arrays
+//   const messagesMultimodal = [
+//     { role: 'system', content: systemInstruction },
+//     ...historyFormatted,
+//     { role: 'user', content: userContent }
+//   ];
+
+//   const messagesTextOnly = [
+//     { role: 'system', content: systemInstruction },
+//     ...historyFormatted,
+//     { role: 'user', content: message + (imageUrl ? " [Image attachment lost in fallback]" : "") }
+//   ];
+
+//   // 🚀 THE CASCADE
+//   try {
+//     const reply = await callOpenRouter('openai/gpt-4o-mini', messagesMultimodal as any);
+//     return `[GPT-4o] ${reply}`; 
+
+//   } catch (err1) {
+//     console.warn(`[AI] Primary failed. Switching...`);
+//     try {
+//       const reply = await callOpenRouter('openai/gpt-3.5-turbo', messagesTextOnly as any);
+//       return `[GPT-3.5] ${reply}`; 
+
+//     } catch (err2) {
+//       console.warn(`[AI] Backup failed. Switching...`);
+//       try {
+//         const reply = await callOpenRouter('meta-llama/llama-3-8b-instruct:free', messagesTextOnly as any);
+//         return `[Llama-3] ${reply}`; 
+        
+//       } catch (err3) {
+//         console.error("Fatal AI Error:", err3);
+//         return "[SYSTEM ERROR] I am unable to connect to any model right now.";
+//       }
+//     }
+//   }
+// };
+
 import OpenAI from 'openai';
 import { PERSONAS } from "../config/personas";
 import { memoryService } from './memory.service'; // 👈 Import Memory
@@ -378,24 +537,26 @@ export const generateAIResponse = async (
   personaId: string, 
   history: { role: 'user' | 'assistant'; content: string }[], 
   message: string,
-  userId: string, // 👈 NEW: We need to know WHO is asking to find THEIR memories
+  userId: string, // 👈 We need to know WHO is asking
   imageUrl?: string 
 ): Promise<string> => {
   
   const persona = PERSONAS.find(p => p.id === personaId);
   let systemInstruction = persona?.systemPrompt || "You are a helpful AI.";
 
-  // 🧠 1. RECALL MEMORIES
-  // We search for memories related to the CURRENT message
+  // 🧠 1. RECALL MEMORIES (Updated for Isolation)
+  // We search for memories related to the CURRENT message AND Persona
   try {
     console.log(`[AI] Searching memories for: "${message.slice(0, 20)}..."`);
-    const relevantMemories = await memoryService.searchMemories(userId, message);
+    
+    // ✅ KEY FIX: Passing personaId as the 2nd argument
+    const relevantMemories = await memoryService.searchMemories(userId, personaId, message);
 
     if (relevantMemories.length > 0) {
       console.log(`[AI] Found ${relevantMemories.length} relevant memories.`);
       const memoryContext = `
       \n[LONG-TERM MEMORY ACTIVE]
-      Relevant facts from past conversations:
+      Relevant facts from past conversations with ${persona?.name}:
       - ${relevantMemories.join("\n- ")}
       \n[END MEMORY]
       `;

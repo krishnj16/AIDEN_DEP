@@ -1014,10 +1014,19 @@ export const sendMessage = async (req: any, res: Response): Promise<void> => {
     if (msgError) throw msgError;
 
     // 🧠 STEP 3 — ADD MEMORY (STRICTLY AS INSTRUCTION)
-    memoryService.addMemory(userId, content, {
-      sessionId: id,
-      role: 'user'
-    }).catch(err => console.error('[Memory] Background save failed:', err));
+    // memoryService.addMemory(userId, content, {
+    //   sessionId: id,
+    //   role: 'user'
+    // }).catch(err => console.error('[Memory] Background save failed:', err));
+    memoryService.addMemory(
+      userId, 
+      session.persona_id, // 👈 KEY FIX: Passing the persona ID
+      content, 
+      {
+        sessionId: id,
+        role: 'user'
+      }
+    ).catch(err => console.error('[Memory] Background save failed:', err));
 
     // C. Fetch Chat History
     const { data: historyData } = await supabase
