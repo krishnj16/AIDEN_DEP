@@ -1075,30 +1075,43 @@
 
 import { Request, Response } from 'express';
 import { supabase } from '../lib/supabase';
-import { generateAIResponse } from '../service/ai.service';
-import { memoryService } from '../service/memory.service'; // ✅ ADDED
+// ✅ FIX: Ensure these point to '../services' (PLURAL), not '../service'
+import { generateAIResponse, routeMessageToPersona } from '../service/ai.service';
+import { memoryService } from '../service/memory.service'; 
+import { PERSONAS } from '../config/personas';
 
 /* =========================================================
    CREATE CHAT SESSION
 ========================================================= */
-export const createSession = async (req: any, res: Response) => {
+export const createSession = async (req: Request, res: Response) => {
   try {
     const { personaId } = req.body;
-    const userId = req.user?.id;
+    const userId = (req as any).user?.id;
+
+    if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Validate Persona
+    const persona = PERSONAS.find((p) => p.id === personaId);
+    if (!persona) {
+      return res.status(400).json({ error: 'Invalid persona ID' });
+    }
 
     const { data, error } = await supabase
       .from('chat_sessions')
       .insert({
         user_id: userId,
-        persona_id: personaId
+        persona_id: personaId,
+        title: `Chat with ${persona.name}`
       })
       .select()
       .single();
 
     if (error) throw error;
 
-    res.json({ success: true, session: data });
-  } catch (error) {
+    res.status(201).json({ success: true, session: data });
+  } catch (error: any) {
     console.error('Error creating session:', error);
     res.status(500).json({ success: false, error: 'Failed to create session' });
   }
@@ -1107,10 +1120,10 @@ export const createSession = async (req: any, res: Response) => {
 /* =========================================================
    GET SESSION MESSAGES
 ========================================================= */
-export const getMessages = async (req: any, res: Response) => {
+export const getMessages = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const userId = req.user?.id;
+    const userId = (req as any).user?.id;
 
     const { data: session } = await supabase
       .from('chat_sessions')
@@ -1120,8 +1133,7 @@ export const getMessages = async (req: any, res: Response) => {
       .single();
 
     if (!session) {
-      res.status(404).json({ success: false, error: 'Session not found' });
-      return;
+      return res.status(404).json({ success: false, error: 'Session not found' });
     }
 
     const { data, error } = await supabase
@@ -1133,7 +1145,7 @@ export const getMessages = async (req: any, res: Response) => {
     if (error) throw error;
 
     res.json({ success: true, data });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching messages:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch messages' });
   }
@@ -1142,9 +1154,9 @@ export const getMessages = async (req: any, res: Response) => {
 /* =========================================================
    GET ALL USER SESSIONS (SIDEBAR)
 ========================================================= */
-export const getUserSessions = async (req: any, res: Response) => {
+export const getUserSessions = async (req: Request, res: Response) => {
   try {
-    const userId = req.user?.id;
+    const userId = (req as any).user?.id;
 
     const { data, error } = await supabase
       .from('chat_sessions')
@@ -1164,11 +1176,11 @@ export const getUserSessions = async (req: any, res: Response) => {
 /* =========================================================
    SEND MESSAGE (TEXT + IMAGE SUPPORT)
 ========================================================= */
-export const sendMessage = async (req: any, res: Response): Promise<void> => {
+export const sendMessage = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { content, image } = req.body;
-    const userId = req.user?.id;
+    const userId = (req as any).user?.id;
 
     // A. Validate Session
     const { data: session, error: sessionError } = await supabase
@@ -1179,34 +1191,25 @@ export const sendMessage = async (req: any, res: Response): Promise<void> => {
       .single();
 
     if (sessionError || !session) {
-      res.status(404).json({ success: false, error: 'Session not found' });
-      return;
+      return res.status(404).json({ success: false, error: 'Session not found' });
     }
 
     // B. Save USER Message
     const { error: msgError } = await supabase
       .from('messages')
-      .insert({
-        session_id: id,
-        role: 'user',
-        content: content
-      });
+      .insert({ session_id: id, role: 'user', content: content });
 
     if (msgError) throw msgError;
 
-    // 🧠 STEP 3 - ADD MEMORY (ISOLATED)
-    // We pass 3 args: UserId, PersonaId, Content
+    // 🧠 STEP 3 - ADD MEMORY
     memoryService.addMemory(
       userId,
-      session.persona_id, // 👈 Passing the ID to lock it to this persona
+      session.persona_id,
       content,
-      {
-        sessionId: id,
-        role: 'user'
-      }
+      { sessionId: id, role: 'user' } // Metadata
     ).catch(err => console.error('[Memory] Background save failed:', err));
 
-    // C. Fetch Chat History
+    // C. Fetch History
     const { data: historyData } = await supabase
       .from('messages')
       .select('role, content')
@@ -1214,10 +1217,9 @@ export const sendMessage = async (req: any, res: Response): Promise<void> => {
       .order('created_at', { ascending: true })
       .limit(10);
 
-    const chatHistory =
-      (historyData as { role: 'user' | 'assistant'; content: string }[]) || [];
+    const chatHistory = (historyData as { role: 'user' | 'assistant'; content: string }[]) || [];
 
-    // D. Generate AI Reply (Now with MEMORY)
+    // D. Generate AI Reply
     const aiText = await generateAIResponse(
       session.persona_id,
       chatHistory,
@@ -1229,11 +1231,7 @@ export const sendMessage = async (req: any, res: Response): Promise<void> => {
     // E. Save AI Message
     const { data: aiMsg, error: aiError } = await supabase
       .from('messages')
-      .insert({
-        session_id: id,
-        role: 'assistant',
-        content: aiText
-      })
+      .insert({ session_id: id, role: 'assistant', content: aiText })
       .select()
       .single();
 
@@ -1243,9 +1241,26 @@ export const sendMessage = async (req: any, res: Response): Promise<void> => {
 
   } catch (error) {
     console.error('Error sending message:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to process message'
-    });
+    res.status(500).json({ success: false, error: 'Failed to process message' });
+  }
+};
+
+/* =========================================================
+   ROUTE MESSAGE (THE NEW FUNCTION)
+========================================================= */
+export const routeMessage = async (req: Request, res: Response) => {
+  try {
+    const { message } = req.body;
+    if (!message) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    console.log(`[Router] Analyzing intent for: "${message}"`);
+    const suggestedPersonaId = await routeMessageToPersona(message);
+    
+    res.json({ personaId: suggestedPersonaId });
+  } catch (error) {
+    console.error("Routing error:", error);
+    res.status(500).json({ error: "Failed to route message" });
   }
 };

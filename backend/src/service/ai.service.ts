@@ -845,3 +845,43 @@ export const generateAIResponse = async (
     return "I am having trouble connecting to my brain.";
   }
 };
+
+// ... existing imports ...
+
+// 🆕 SMART ROUTER LOGIC
+export const routeMessageToPersona = async (message: string): Promise<string> => {
+  try {
+    const prompt = `
+      Analyze the user's input and select the best AI Persona ID to handle it.
+      
+      PERSONAS:
+      - 'jarvis': Code, Math, Technical, Logic, Science, Debugging.
+      - 'friday': Casual chat, Emotions, Venting, Creativity, Jokes, General help.
+      - 'titan': Fitness, Workouts, Diet, Health, Discipline, Motivation.
+
+      INPUT: "${message}"
+
+      RULES:
+      - Return ONLY the ID (jarvis, friday, or titan).
+      - If unsure, default to 'friday'.
+      - Do NOT write explanations. Just the ID.
+    `;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini", // Fast & Cheap model is perfect for this
+      messages: [{ role: "system", content: prompt }],
+      temperature: 0, // Strict logic
+    });
+
+    const decision = response.choices[0]?.message?.content?.trim().toLowerCase() || 'friday';
+    
+    // Clean up response (just in case AI adds punctuation)
+    if (decision.includes('jarvis')) return 'jarvis';
+    if (decision.includes('titan')) return 'titan';
+    return 'friday';
+
+  } catch (error) {
+    console.error("Router Error:", error);
+    return 'friday'; // Safe fallback
+  }
+};
