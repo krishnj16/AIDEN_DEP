@@ -511,9 +511,119 @@
 //   }
 // };
 
+// import OpenAI from 'openai';
+// import { PERSONAS } from "../config/personas";
+// import { memoryService } from './memory.service'; // 👈 Import Memory
+
+// const openai = new OpenAI({
+//   apiKey: process.env.OPENROUTER_API_KEY,
+//   baseURL: 'https://openrouter.ai/api/v1', 
+//   defaultHeaders: {
+//     'HTTP-Referer': 'http://localhost:3000',
+//     'X-Title': 'AIDEN',
+//   },
+// });
+
+// // Helper to make the actual API call
+// async function callOpenRouter(model: string, messages: any[]) {
+//   const completion = await openai.chat.completions.create({
+//     model: model, 
+//     messages: messages,
+//   });
+//   return completion.choices[0]?.message?.content || "";
+// }
+
+// export const generateAIResponse = async (
+//   personaId: string, 
+//   history: { role: 'user' | 'assistant'; content: string }[], 
+//   message: string,
+//   userId: string, // 👈 We need to know WHO is asking
+//   imageUrl?: string 
+// ): Promise<string> => {
+  
+//   const persona = PERSONAS.find(p => p.id === personaId);
+//   let systemInstruction = persona?.systemPrompt || "You are a helpful AI.";
+
+//   // 🧠 1. RECALL MEMORIES (Updated for Isolation)
+//   // We search for memories related to the CURRENT message AND Persona
+//   try {
+//     console.log(`[AI] Searching memories for: "${message.slice(0, 20)}..."`);
+    
+//     // ✅ KEY FIX: Passing personaId as the 2nd argument
+//     const relevantMemories = await memoryService.searchMemories(userId, personaId, message);
+
+//     if (relevantMemories.length > 0) {
+//       console.log(`[AI] Found ${relevantMemories.length} relevant memories.`);
+//       const memoryContext = `
+//       \n[LONG-TERM MEMORY ACTIVE]
+//       Relevant facts from past conversations with ${persona?.name}:
+//       - ${relevantMemories.join("\n- ")}
+//       \n[END MEMORY]
+//       `;
+//       // Inject into the system prompt
+//       systemInstruction += memoryContext;
+//     }
+//   } catch (err) {
+//     console.warn("[AI] Memory retrieval failed (continuing without memory):", err);
+//   }
+
+//   // 2. Prepare History
+//   const historyFormatted = history.map(h => ({
+//     role: h.role === 'assistant' ? 'assistant' : 'user',
+//     content: h.content
+//   }));
+
+//   // 3. Prepare Current Message (Multimodal)
+//   let userContent: any = message;
+//   if (imageUrl) {
+//     userContent = [
+//       { type: "text", text: message },
+//       { type: "image_url", image_url: { url: imageUrl } }
+//     ];
+//   }
+
+//   // 4. Build Message Arrays
+//   const messagesMultimodal = [
+//     { role: 'system', content: systemInstruction },
+//     ...historyFormatted,
+//     { role: 'user', content: userContent }
+//   ];
+
+//   const messagesTextOnly = [
+//     { role: 'system', content: systemInstruction },
+//     ...historyFormatted,
+//     { role: 'user', content: message + (imageUrl ? " [Image attachment lost in fallback]" : "") }
+//   ];
+
+//   // 🚀 THE CASCADE
+//   try {
+//     const reply = await callOpenRouter('openai/gpt-4o-mini', messagesMultimodal as any);
+//     return `[GPT-4o] ${reply}`; 
+
+//   } catch (err1) {
+//     console.warn(`[AI] Primary failed. Switching...`);
+//     try {
+//       const reply = await callOpenRouter('openai/gpt-3.5-turbo', messagesTextOnly as any);
+//       return `[GPT-3.5] ${reply}`; 
+
+//     } catch (err2) {
+//       console.warn(`[AI] Backup failed. Switching...`);
+//       try {
+//         const reply = await callOpenRouter('meta-llama/llama-3-8b-instruct:free', messagesTextOnly as any);
+//         return `[Llama-3] ${reply}`; 
+        
+//       } catch (err3) {
+//         console.error("Fatal AI Error:", err3);
+//         return "[SYSTEM ERROR] I am unable to connect to any model right now.";
+//       }
+//     }
+//   }
+// };
+
 import OpenAI from 'openai';
 import { PERSONAS } from "../config/personas";
-import { memoryService } from './memory.service'; // 👈 Import Memory
+import { memoryService } from './memory.service';
+import { TOOLS, TOOL_DEFINITIONS } from "../config/tools"; 
 
 const openai = new OpenAI({
   apiKey: process.env.OPENROUTER_API_KEY,
@@ -524,56 +634,49 @@ const openai = new OpenAI({
   },
 });
 
-// Helper to make the actual API call
-async function callOpenRouter(model: string, messages: any[]) {
+// Helper for calling the API
+async function callOpenRouter(model: string, messages: any[], tools?: any[]) {
   const completion = await openai.chat.completions.create({
     model: model, 
     messages: messages,
+    tools: tools, 
+    tool_choice: tools ? "auto" : "none",
   });
-  return completion.choices[0]?.message?.content || "";
+  return completion.choices[0]?.message;
 }
 
 export const generateAIResponse = async (
   personaId: string, 
   history: { role: 'user' | 'assistant'; content: string }[], 
   message: string,
-  userId: string, // 👈 We need to know WHO is asking
+  userId: string,
   imageUrl?: string 
 ): Promise<string> => {
   
   const persona = PERSONAS.find(p => p.id === personaId);
   let systemInstruction = persona?.systemPrompt || "You are a helpful AI.";
 
-  // 🧠 1. RECALL MEMORIES (Updated for Isolation)
-  // We search for memories related to the CURRENT message AND Persona
+  // 🧠 1. RECALL MEMORIES (Isolated)
   try {
-    console.log(`[AI] Searching memories for: "${message.slice(0, 20)}..."`);
-    
-    // ✅ KEY FIX: Passing personaId as the 2nd argument
     const relevantMemories = await memoryService.searchMemories(userId, personaId, message);
-
     if (relevantMemories.length > 0) {
-      console.log(`[AI] Found ${relevantMemories.length} relevant memories.`);
-      const memoryContext = `
+      systemInstruction += `
       \n[LONG-TERM MEMORY ACTIVE]
-      Relevant facts from past conversations with ${persona?.name}:
+      Relevant facts:
       - ${relevantMemories.join("\n- ")}
       \n[END MEMORY]
       `;
-      // Inject into the system prompt
-      systemInstruction += memoryContext;
     }
   } catch (err) {
-    console.warn("[AI] Memory retrieval failed (continuing without memory):", err);
+    console.warn("[AI] Memory retrieval failed:", err);
   }
 
-  // 2. Prepare History
+  // 2. Prepare Messages
   const historyFormatted = history.map(h => ({
     role: h.role === 'assistant' ? 'assistant' : 'user',
     content: h.content
   }));
 
-  // 3. Prepare Current Message (Multimodal)
   let userContent: any = message;
   if (imageUrl) {
     userContent = [
@@ -582,40 +685,56 @@ export const generateAIResponse = async (
     ];
   }
 
-  // 4. Build Message Arrays
-  const messagesMultimodal = [
+  const messages = [
     { role: 'system', content: systemInstruction },
     ...historyFormatted,
     { role: 'user', content: userContent }
   ];
 
-  const messagesTextOnly = [
-    { role: 'system', content: systemInstruction },
-    ...historyFormatted,
-    { role: 'user', content: message + (imageUrl ? " [Image attachment lost in fallback]" : "") }
-  ];
-
-  // 🚀 THE CASCADE
+  // 🚀 3. THE TOOL LOOP
   try {
-    const reply = await callOpenRouter('openai/gpt-4o-mini', messagesMultimodal as any);
-    return `[GPT-4o] ${reply}`; 
+    console.log("[AI] Thinking (checking tools)...");
+    
+    // Step A: Ask GPT-4o if it wants to use a tool
+    let reply = await callOpenRouter('openai/gpt-4o-mini', messages as any, TOOL_DEFINITIONS);
+    
+    // Step B: Did it ask for a tool?
+    if (reply?.tool_calls) {
+      console.log(`[AI] Tool Request: ${reply.tool_calls.length} actions.`);
+      
+      // 1. Add the "Request" to history
+      messages.push(reply as any);
 
-  } catch (err1) {
-    console.warn(`[AI] Primary failed. Switching...`);
-    try {
-      const reply = await callOpenRouter('openai/gpt-3.5-turbo', messagesTextOnly as any);
-      return `[GPT-3.5] ${reply}`; 
-
-    } catch (err2) {
-      console.warn(`[AI] Backup failed. Switching...`);
-      try {
-        const reply = await callOpenRouter('meta-llama/llama-3-8b-instruct:free', messagesTextOnly as any);
-        return `[Llama-3] ${reply}`; 
+      // 2. Execute the tools
+      // ⚠️ FIX: Added 'as any' to bypass the TypeScript error
+      for (const toolCall of reply.tool_calls as any[]) {
+        const functionName = toolCall.function.name;
+        const args = JSON.parse(toolCall.function.arguments);
         
-      } catch (err3) {
-        console.error("Fatal AI Error:", err3);
-        return "[SYSTEM ERROR] I am unable to connect to any model right now.";
+        console.log(`[AI] Executing: ${functionName}`, args);
+
+        // Run the actual code from tools.ts
+        const toolResult = await TOOLS[functionName].execute(args);
+
+        // 3. Add the "Result" to history
+        messages.push({
+          role: "tool",
+          tool_call_id: toolCall.id,
+          content: toolResult,
+        } as any);
       }
+
+      // Step C: Ask GPT-4o again (with the result)
+      console.log("[AI] Generating final answer with tool data...");
+      const finalReply = await callOpenRouter('openai/gpt-4o-mini', messages as any);
+      return `[GPT-4o + Tool] ${finalReply?.content}`;
     }
+
+    // No tool needed? Just return the text.
+    return `[GPT-4o] ${reply?.content}`;
+
+  } catch (err) {
+    console.error("[AI] Tool Error:", err);
+    return "I tried to use a tool but something went wrong.";
   }
 };

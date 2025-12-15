@@ -509,6 +509,133 @@
 //   }
 // };
 // @ts-ignore
+// import { v4 as uuidv4 } from 'uuid';
+// import { QdrantClient } from '@qdrant/js-client-rest';
+// import OpenAI from 'openai';
+// import dotenv from 'dotenv';
+
+// dotenv.config();
+
+// const qdrant = new QdrantClient({
+//   url: process.env.QDRANT_URL,
+//   apiKey: process.env.QDRANT_API_KEY,
+// });
+
+// const openai = new OpenAI({
+//   apiKey: process.env.OPENROUTER_API_KEY,
+//   baseURL: 'https://openrouter.ai/api/v1',
+//   defaultHeaders: {
+//     'HTTP-Referer': 'http://localhost:3000',
+//     'X-Title': 'AIDEN',
+//   },
+// });
+
+// const COLLECTION_NAME = 'aiden_memory';
+
+// export const memoryService = {
+//   initialize: async () => {
+//     try {
+//       const result = await qdrant.getCollections();
+//       const exists = result.collections.some(c => c.name === COLLECTION_NAME);
+
+//       if (!exists) {
+//         await qdrant.createCollection(COLLECTION_NAME, {
+//           vectors: { size: 1536, distance: 'Cosine' },
+//         });
+//       }
+
+//       // Force create indexes for filtering
+//       try {
+//         await qdrant.createPayloadIndex(COLLECTION_NAME, {
+//           field_name: 'personaId',
+//           field_schema: 'keyword', 
+//           wait: true,
+//         });
+//         await qdrant.createPayloadIndex(COLLECTION_NAME, {
+//           field_name: 'userId',
+//           field_schema: 'keyword', 
+//           wait: true,
+//         });
+//         console.log('[Memory] Isolation Indexes OK.');
+//       } catch (err) { /* Ignore */ }
+      
+//       console.log('[Memory] Ready.');
+//     } catch (error) {
+//       console.error('[Memory] Connection Failed:', error);
+//     }
+//   },
+
+//   // ✅ ADD MEMORY (Requires Persona ID)
+//   addMemory: async (userId: string, personaId: string, text: string, metadata?: any) => {
+//     try {
+//       if (!text || text.trim().length < 5) return;
+
+//       // 🔍 DEBUG LOG
+//       console.log(`[Memory Save] User: ${userId} | Persona: ${personaId} | Text: "${text.slice(0, 15)}..."`);
+      
+//       const embedding = await openai.embeddings.create({
+//         model: 'openai/text-embedding-3-small', 
+//         input: text,
+//       });
+      
+//       await qdrant.upsert(COLLECTION_NAME, {
+//         wait: true,
+//         points: [
+//           {
+//             id: uuidv4(),
+//             vector: embedding.data[0].embedding,
+//             payload: {
+//               userId,
+//               personaId, // ✅ Saved here
+//               text,
+//               timestamp: new Date().toISOString(),
+//               ...metadata
+//             }
+//           }
+//         ]
+//       });
+//       console.log(`[Memory] Saved ✅`);
+
+//     } catch (error) {
+//       console.error('[Memory] Save Error:', error);
+//     }
+//   },
+
+//   // ✅ SEARCH MEMORIES (Requires Persona ID)
+//   searchMemories: async (userId: string, personaId: string, query: string, limit = 3) => {
+//     try {
+//       // 🔍 DEBUG LOG
+//       console.log(`[Memory Search] User: ${userId} | Persona: ${personaId} | Query: "${query.slice(0, 15)}..."`);
+
+//       const embedding = await openai.embeddings.create({
+//         model: 'openai/text-embedding-3-small',
+//         input: query,
+//       });
+
+//       const searchResult = await qdrant.search(COLLECTION_NAME, {
+//         vector: embedding.data[0].embedding,
+//         limit: limit,
+//         // ✅ DOUBLE FILTER: User + Persona
+//         filter: {
+//           must: [
+//             { key: 'userId', match: { value: userId } },
+//             { key: 'personaId', match: { value: personaId } } 
+//           ]
+//         }
+//       });
+
+//       console.log(`[Memory] Found ${searchResult.length} matches.`);
+//       return searchResult.map(res => res.payload?.text as string).filter(Boolean);
+
+//     } catch (error) {
+//       console.error('[Memory] Search Error:', error);
+//       return [];
+//     }
+//   }
+// };
+
+
+// @ts-ignore
 import { v4 as uuidv4 } from 'uuid';
 import { QdrantClient } from '@qdrant/js-client-rest';
 import OpenAI from 'openai';
@@ -544,7 +671,7 @@ export const memoryService = {
         });
       }
 
-      // Force create indexes for filtering
+      // Ensure indexes exist for fast filtering
       try {
         await qdrant.createPayloadIndex(COLLECTION_NAME, {
           field_name: 'personaId',
@@ -556,23 +683,19 @@ export const memoryService = {
           field_schema: 'keyword', 
           wait: true,
         });
-        console.log('[Memory] Isolation Indexes OK.');
-      } catch (err) { /* Ignore */ }
+      } catch (err) { /* Indexes likely exist */ }
       
-      console.log('[Memory] Ready.');
+      console.log('[Memory] System Online (Isolated). 🧠');
     } catch (error) {
       console.error('[Memory] Connection Failed:', error);
     }
   },
 
-  // ✅ ADD MEMORY (Requires Persona ID)
+  // ✅ ADDED: personaId argument
   addMemory: async (userId: string, personaId: string, text: string, metadata?: any) => {
     try {
       if (!text || text.trim().length < 5) return;
 
-      // 🔍 DEBUG LOG
-      console.log(`[Memory Save] User: ${userId} | Persona: ${personaId} | Text: "${text.slice(0, 15)}..."`);
-      
       const embedding = await openai.embeddings.create({
         model: 'openai/text-embedding-3-small', 
         input: text,
@@ -586,7 +709,7 @@ export const memoryService = {
             vector: embedding.data[0].embedding,
             payload: {
               userId,
-              personaId, // ✅ Saved here
+              personaId, // 👈 KEY: Tagging the memory
               text,
               timestamp: new Date().toISOString(),
               ...metadata
@@ -594,19 +717,16 @@ export const memoryService = {
           }
         ]
       });
-      console.log(`[Memory] Saved ✅`);
+      // console.log(`[Memory] Saved to ${personaId}'s storage.`); // Uncomment for debugging
 
     } catch (error) {
       console.error('[Memory] Save Error:', error);
     }
   },
 
-  // ✅ SEARCH MEMORIES (Requires Persona ID)
+  // ✅ ADDED: personaId argument
   searchMemories: async (userId: string, personaId: string, query: string, limit = 3) => {
     try {
-      // 🔍 DEBUG LOG
-      console.log(`[Memory Search] User: ${userId} | Persona: ${personaId} | Query: "${query.slice(0, 15)}..."`);
-
       const embedding = await openai.embeddings.create({
         model: 'openai/text-embedding-3-small',
         input: query,
@@ -615,7 +735,7 @@ export const memoryService = {
       const searchResult = await qdrant.search(COLLECTION_NAME, {
         vector: embedding.data[0].embedding,
         limit: limit,
-        // ✅ DOUBLE FILTER: User + Persona
+        // ✅ KEY: Strict Filter
         filter: {
           must: [
             { key: 'userId', match: { value: userId } },
@@ -624,7 +744,6 @@ export const memoryService = {
         }
       });
 
-      console.log(`[Memory] Found ${searchResult.length} matches.`);
       return searchResult.map(res => res.payload?.text as string).filter(Boolean);
 
     } catch (error) {

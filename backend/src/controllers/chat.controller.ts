@@ -892,6 +892,187 @@
 // };
 
 
+// import { Request, Response } from 'express';
+// import { supabase } from '../lib/supabase';
+// import { generateAIResponse } from '../service/ai.service';
+// import { memoryService } from '../service/memory.service'; // ✅ ADDED
+
+// /* =========================================================
+//    CREATE CHAT SESSION
+// ========================================================= */
+// export const createSession = async (req: any, res: Response) => {
+//   try {
+//     const { personaId } = req.body;
+//     const userId = req.user?.id;
+
+//     const { data, error } = await supabase
+//       .from('chat_sessions')
+//       .insert({
+//         user_id: userId,
+//         persona_id: personaId
+//       })
+//       .select()
+//       .single();
+
+//     if (error) throw error;
+
+//     res.json({ success: true, session: data });
+//   } catch (error) {
+//     console.error('Error creating session:', error);
+//     res.status(500).json({ success: false, error: 'Failed to create session' });
+//   }
+// };
+
+// /* =========================================================
+//    GET SESSION MESSAGES
+// ========================================================= */
+// export const getMessages = async (req: any, res: Response) => {
+//   try {
+//     const { id } = req.params;
+//     const userId = req.user?.id;
+
+//     const { data: session } = await supabase
+//       .from('chat_sessions')
+//       .select('id')
+//       .eq('id', id)
+//       .eq('user_id', userId)
+//       .single();
+
+//     if (!session) {
+//       res.status(404).json({ success: false, error: 'Session not found' });
+//       return;
+//     }
+
+//     const { data, error } = await supabase
+//       .from('messages')
+//       .select('*')
+//       .eq('session_id', id)
+//       .order('created_at', { ascending: true });
+
+//     if (error) throw error;
+
+//     res.json({ success: true, data });
+//   } catch (error) {
+//     console.error('Error fetching messages:', error);
+//     res.status(500).json({ success: false, error: 'Failed to fetch messages' });
+//   }
+// };
+
+// /* =========================================================
+//    GET ALL USER SESSIONS (SIDEBAR)
+// ========================================================= */
+// export const getUserSessions = async (req: any, res: Response) => {
+//   try {
+//     const userId = req.user?.id;
+
+//     const { data, error } = await supabase
+//       .from('chat_sessions')
+//       .select('*')
+//       .eq('user_id', userId)
+//       .order('created_at', { ascending: false });
+
+//     if (error) throw error;
+
+//     res.json({ success: true, sessions: data });
+//   } catch (error) {
+//     console.error('Error fetching sessions:', error);
+//     res.status(500).json({ success: false, error: 'Failed to fetch sessions' });
+//   }
+// };
+
+// /* =========================================================
+//    SEND MESSAGE (TEXT + IMAGE SUPPORT)
+// ========================================================= */
+// export const sendMessage = async (req: any, res: Response): Promise<void> => {
+//   try {
+//     const { id } = req.params;
+//     const { content, image } = req.body;
+//     const userId = req.user?.id;
+
+//     // A. Validate Session
+//     const { data: session, error: sessionError } = await supabase
+//       .from('chat_sessions')
+//       .select('*')
+//       .eq('id', id)
+//       .eq('user_id', userId)
+//       .single();
+
+//     if (sessionError || !session) {
+//       res.status(404).json({ success: false, error: 'Session not found' });
+//       return;
+//     }
+
+//     // B. Save USER Message
+//     const { error: msgError } = await supabase
+//       .from('messages')
+//       .insert({
+//         session_id: id,
+//         role: 'user',
+//         content: content
+//       });
+
+//     if (msgError) throw msgError;
+
+//     // 🧠 STEP 3 — ADD MEMORY (STRICTLY AS INSTRUCTION)
+//     // memoryService.addMemory(userId, content, {
+//     //   sessionId: id,
+//     //   role: 'user'
+//     // }).catch(err => console.error('[Memory] Background save failed:', err));
+//     memoryService.addMemory(
+//       userId, 
+//       session.persona_id, // 👈 KEY FIX: Passing the persona ID
+//       content, 
+//       {
+//         sessionId: id,
+//         role: 'user'
+//       }
+//     ).catch(err => console.error('[Memory] Background save failed:', err));
+
+//     // C. Fetch Chat History
+//     const { data: historyData } = await supabase
+//       .from('messages')
+//       .select('role, content')
+//       .eq('session_id', id)
+//       .order('created_at', { ascending: true })
+//       .limit(10);
+
+//     const chatHistory =
+//       (historyData as { role: 'user' | 'assistant'; content: string }[]) || [];
+
+//     // D. Generate AI Reply (Now with MEMORY)
+//     const aiText = await generateAIResponse(
+//       session.persona_id,
+//       chatHistory,
+//       content,
+//       userId, // 👈 PASS THIS (as instructed)
+//       image   // 👈 Image is now the 5th argument
+//     );
+
+//     // E. Save AI Message
+//     const { data: aiMsg, error: aiError } = await supabase
+//       .from('messages')
+//       .insert({
+//         session_id: id,
+//         role: 'assistant',
+//         content: aiText
+//       })
+//       .select()
+//       .single();
+
+//     if (aiError) throw aiError;
+
+//     res.json({ success: true, message: aiMsg });
+
+//   } catch (error) {
+//     console.error('Error sending message:', error);
+//     res.status(500).json({
+//       success: false,
+//       error: 'Failed to process message'
+//     });
+//   }
+// };
+
+
 import { Request, Response } from 'express';
 import { supabase } from '../lib/supabase';
 import { generateAIResponse } from '../service/ai.service';
@@ -1013,15 +1194,12 @@ export const sendMessage = async (req: any, res: Response): Promise<void> => {
 
     if (msgError) throw msgError;
 
-    // 🧠 STEP 3 — ADD MEMORY (STRICTLY AS INSTRUCTION)
-    // memoryService.addMemory(userId, content, {
-    //   sessionId: id,
-    //   role: 'user'
-    // }).catch(err => console.error('[Memory] Background save failed:', err));
+    // 🧠 STEP 3 - ADD MEMORY (ISOLATED)
+    // We pass 3 args: UserId, PersonaId, Content
     memoryService.addMemory(
-      userId, 
-      session.persona_id, // 👈 KEY FIX: Passing the persona ID
-      content, 
+      userId,
+      session.persona_id, // 👈 Passing the ID to lock it to this persona
+      content,
       {
         sessionId: id,
         role: 'user'
@@ -1044,8 +1222,8 @@ export const sendMessage = async (req: any, res: Response): Promise<void> => {
       session.persona_id,
       chatHistory,
       content,
-      userId, // 👈 PASS THIS (as instructed)
-      image   // 👈 Image is now the 5th argument
+      userId,
+      image
     );
 
     // E. Save AI Message
