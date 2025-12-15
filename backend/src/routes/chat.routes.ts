@@ -79,7 +79,9 @@ import {
   getMessages,
   sendMessage,
   getUserSessions,
-  routeMessage 
+  routeMessage ,
+  deleteSession,    // 👈 Import this
+  clearAllSessions  // 👈 Import this
 } from '../controllers/chat.controller';
 
 const router = Router();
@@ -92,5 +94,7 @@ router.post('/sessions', requireAuth, createSession);
 router.get('/sessions', requireAuth, getUserSessions);
 router.get('/:id/messages', requireAuth, getMessages);
 router.post('/:id/messages', requireAuth, sendMessage);
+router.delete('/sessions', requireAuth, clearAllSessions); // Clear All
+router.delete('/sessions/:id', requireAuth, deleteSession); // Delete One
 
 export default router;

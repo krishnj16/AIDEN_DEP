@@ -1264,3 +1264,71 @@ export const routeMessage = async (req: Request, res: Response) => {
     res.status(500).json({ error: "Failed to route message" });
   }
 };
+
+
+// ... (keep all existing imports and functions)
+
+/* =========================================================
+   DELETE SPECIFIC SESSION
+========================================================= */
+export const deleteSession = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = (req as any).user?.id;
+
+    // 1. Delete Messages first (Foreign Key constraint)
+    await supabase.from('messages').delete().eq('session_id', id);
+
+    // 2. Delete Session
+    const { error } = await supabase
+      .from('chat_sessions')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', userId); // Security: User can only delete their own
+
+    if (error) throw error;
+
+    res.json({ success: true, message: "Session deleted" });
+  } catch (error) {
+    console.error("Delete error:", error);
+    res.status(500).json({ error: "Failed to delete session" });
+  }
+};
+
+/* =========================================================
+   CLEAR ALL SESSIONS
+========================================================= */
+export const clearAllSessions = async (req: Request, res: Response) => {
+  try {
+    const userId = (req as any).user?.id;
+
+    // Supabase doesn't support "Cascading Delete" easily via JS client 
+    // without RLS setup sometimes, so we do it manually to be safe.
+    
+    // 1. Get all user session IDs
+    const { data: sessions } = await supabase
+      .from('chat_sessions')
+      .select('id')
+      .eq('user_id', userId);
+
+    const ids = sessions?.map(s => s.id) || [];
+
+    if (ids.length > 0) {
+      // 2. Delete all messages for these sessions
+      await supabase.from('messages').delete().in('session_id', ids);
+
+      // 3. Delete the sessions
+      const { error } = await supabase
+        .from('chat_sessions')
+        .delete()
+        .in('id', ids);
+        
+      if (error) throw error;
+    }
+
+    res.json({ success: true, message: "All history cleared" });
+  } catch (error) {
+    console.error("Clear All error:", error);
+    res.status(500).json({ error: "Failed to clear history" });
+  }
+};
