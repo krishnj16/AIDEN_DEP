@@ -8,7 +8,8 @@ export const getPersonas = (req: Request, res: Response) => {
       name: p.name,
       role: p.role,
       description: p.description,
-      icon: p.icon
+      icon: (p as any).icon, 
+  theme: (p as any).theme
     }));
 
     res.status(200).json({

@@ -620,6 +620,124 @@
 //   }
 // };
 
+// import OpenAI from 'openai';
+// import { PERSONAS } from "../config/personas";
+// import { memoryService } from './memory.service';
+// import { TOOLS, TOOL_DEFINITIONS } from "../config/tools"; 
+
+// const openai = new OpenAI({
+//   apiKey: process.env.OPENROUTER_API_KEY,
+//   baseURL: 'https://openrouter.ai/api/v1', 
+//   defaultHeaders: {
+//     'HTTP-Referer': 'http://localhost:3000',
+//     'X-Title': 'AIDEN',
+//   },
+// });
+
+// // Helper for calling the API
+// async function callOpenRouter(model: string, messages: any[], tools?: any[]) {
+//   const completion = await openai.chat.completions.create({
+//     model: model, 
+//     messages: messages,
+//     tools: tools, 
+//     tool_choice: tools ? "auto" : "none",
+//   });
+//   return completion.choices[0]?.message;
+// }
+
+// export const generateAIResponse = async (
+//   personaId: string, 
+//   history: { role: 'user' | 'assistant'; content: string }[], 
+//   message: string,
+//   userId: string,
+//   imageUrl?: string 
+// ): Promise<string> => {
+  
+//   const persona = PERSONAS.find(p => p.id === personaId);
+//   let systemInstruction = persona?.systemPrompt || "You are a helpful AI.";
+
+//   // 🧠 1. RECALL MEMORIES (Isolated)
+//   try {
+//     const relevantMemories = await memoryService.searchMemories(userId, personaId, message);
+//     if (relevantMemories.length > 0) {
+//       systemInstruction += `
+//       \n[LONG-TERM MEMORY ACTIVE]
+//       Relevant facts:
+//       - ${relevantMemories.join("\n- ")}
+//       \n[END MEMORY]
+//       `;
+//     }
+//   } catch (err) {
+//     console.warn("[AI] Memory retrieval failed:", err);
+//   }
+
+//   // 2. Prepare Messages
+//   const historyFormatted = history.map(h => ({
+//     role: h.role === 'assistant' ? 'assistant' : 'user',
+//     content: h.content
+//   }));
+
+//   let userContent: any = message;
+//   if (imageUrl) {
+//     userContent = [
+//       { type: "text", text: message },
+//       { type: "image_url", image_url: { url: imageUrl } }
+//     ];
+//   }
+
+//   const messages = [
+//     { role: 'system', content: systemInstruction },
+//     ...historyFormatted,
+//     { role: 'user', content: userContent }
+//   ];
+
+//   // 🚀 3. THE TOOL LOOP
+//   try {
+//     console.log("[AI] Thinking (checking tools)...");
+    
+//     // Step A: Ask GPT-4o if it wants to use a tool
+//     let reply = await callOpenRouter('openai/gpt-4o-mini', messages as any, TOOL_DEFINITIONS);
+    
+//     // Step B: Did it ask for a tool?
+//     if (reply?.tool_calls) {
+//       console.log(`[AI] Tool Request: ${reply.tool_calls.length} actions.`);
+      
+//       // 1. Add the "Request" to history
+//       messages.push(reply as any);
+
+//       // 2. Execute the tools
+//       // ⚠️ FIX: Added 'as any' to bypass the TypeScript error
+//       for (const toolCall of reply.tool_calls as any[]) {
+//         const functionName = toolCall.function.name;
+//         const args = JSON.parse(toolCall.function.arguments);
+        
+//         console.log(`[AI] Executing: ${functionName}`, args);
+
+//         // Run the actual code from tools.ts
+//         const toolResult = await TOOLS[functionName].execute(args);
+
+//         // 3. Add the "Result" to history
+//         messages.push({
+//           role: "tool",
+//           tool_call_id: toolCall.id,
+//           content: toolResult,
+//         } as any);
+//       }
+
+//       // Step C: Ask GPT-4o again (with the result)
+//       console.log("[AI] Generating final answer with tool data...");
+//       const finalReply = await callOpenRouter('openai/gpt-4o-mini', messages as any);
+//       return `[GPT-4o + Tool] ${finalReply?.content}`;
+//     }
+
+//     // No tool needed? Just return the text.
+//     return `[GPT-4o] ${reply?.content}`;
+
+//   } catch (err) {
+//     console.error("[AI] Tool Error:", err);
+//     return "I tried to use a tool but something went wrong.";
+//   }
+// };
 import OpenAI from 'openai';
 import { PERSONAS } from "../config/personas";
 import { memoryService } from './memory.service';
@@ -656,16 +774,11 @@ export const generateAIResponse = async (
   const persona = PERSONAS.find(p => p.id === personaId);
   let systemInstruction = persona?.systemPrompt || "You are a helpful AI.";
 
-  // 🧠 1. RECALL MEMORIES (Isolated)
+  // 1. RECALL MEMORIES
   try {
     const relevantMemories = await memoryService.searchMemories(userId, personaId, message);
     if (relevantMemories.length > 0) {
-      systemInstruction += `
-      \n[LONG-TERM MEMORY ACTIVE]
-      Relevant facts:
-      - ${relevantMemories.join("\n- ")}
-      \n[END MEMORY]
-      `;
+      systemInstruction += `\n[MEMORY ACTIVE] Facts: ${relevantMemories.join("; ")}\n`;
     }
   } catch (err) {
     console.warn("[AI] Memory retrieval failed:", err);
@@ -691,32 +804,28 @@ export const generateAIResponse = async (
     { role: 'user', content: userContent }
   ];
 
-  // 🚀 3. THE TOOL LOOP
+  // 3. THE TOOL LOOP
   try {
-    console.log("[AI] Thinking (checking tools)...");
+    console.log("[AI] Thinking...");
     
-    // Step A: Ask GPT-4o if it wants to use a tool
+    // A: Ask AI
     let reply = await callOpenRouter('openai/gpt-4o-mini', messages as any, TOOL_DEFINITIONS);
     
-    // Step B: Did it ask for a tool?
+    // B: Check for Tools
     if (reply?.tool_calls) {
       console.log(`[AI] Tool Request: ${reply.tool_calls.length} actions.`);
-      
-      // 1. Add the "Request" to history
       messages.push(reply as any);
 
-      // 2. Execute the tools
-      // ⚠️ FIX: Added 'as any' to bypass the TypeScript error
-      for (const toolCall of reply.tool_calls as any[]) {
+      // ⚠️ FIX: Cast to 'any[]' to stop the TypeScript error in your screenshot
+      for (const toolCall of (reply.tool_calls as any[])) {
         const functionName = toolCall.function.name;
         const args = JSON.parse(toolCall.function.arguments);
         
         console.log(`[AI] Executing: ${functionName}`, args);
-
-        // Run the actual code from tools.ts
+        
+        // Execute
         const toolResult = await TOOLS[functionName].execute(args);
 
-        // 3. Add the "Result" to history
         messages.push({
           role: "tool",
           tool_call_id: toolCall.id,
@@ -724,17 +833,15 @@ export const generateAIResponse = async (
         } as any);
       }
 
-      // Step C: Ask GPT-4o again (with the result)
-      console.log("[AI] Generating final answer with tool data...");
+      // C: Final Answer
       const finalReply = await callOpenRouter('openai/gpt-4o-mini', messages as any);
-      return `[GPT-4o + Tool] ${finalReply?.content}`;
+      return finalReply?.content || "I processed the data but have no words.";
     }
 
-    // No tool needed? Just return the text.
-    return `[GPT-4o] ${reply?.content}`;
+    return reply?.content || "System Malfunction: Empty response.";
 
   } catch (err) {
-    console.error("[AI] Tool Error:", err);
-    return "I tried to use a tool but something went wrong.";
+    console.error("[AI] Error:", err);
+    return "I am having trouble connecting to my brain.";
   }
 };
