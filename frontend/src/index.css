@@ -1,0 +1,148 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Pure White Theme - High-Key Apple Minimalist */
+    --background: 0 0% 100%;
+    --foreground: 0 0% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+
+    /* Primary - Subtle titanium/silver */
+    --primary: 0 0% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary - Very light grey */
+    --secondary: 0 0% 97%;
+    --secondary-foreground: 0 0% 30%;
+
+    /* Muted - Cool grey for subtitles */
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 55%;
+
+    /* Accent - Subtle blue tint for focus states */
+    --accent: 210 20% 96%;
+    --accent-foreground: 210 10% 40%;
+
+    --destructive: 0 65% 55%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 92%;
+    --input: 0 0% 85%;
+    --ring: 0 0% 70%;
+
+    --radius: 0.75rem;
+
+    /* Custom AIDEN Design Tokens */
+    --aiden-ghost: 0 0% 90%;
+    --aiden-titanium: 0 0% 75%;
+    --aiden-silver: 0 0% 85%;
+    --aiden-cool-grey: 210 5% 55%;
+    --aiden-warm-white: 40 20% 98%;
+
+    /* Neumorphic Shadows */
+    --shadow-neumorphic-light: 8px 8px 20px hsl(0 0% 88%), -8px -8px 20px hsl(0 0% 100%);
+    --shadow-neumorphic-inset: inset 4px 4px 10px hsl(0 0% 90%), inset -4px -4px 10px hsl(0 0% 100%);
+    --shadow-soft: 0 4px 30px hsl(0 0% 0% / 0.03);
+    --shadow-emboss: 0 1px 2px hsl(0 0% 100%), 0 2px 8px hsl(0 0% 0% / 0.08);
+
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 0 0% 30%;
+    --sidebar-primary: 0 0% 20%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 0 0% 96%;
+    --sidebar-accent-foreground: 0 0% 20%;
+    --sidebar-border: 0 0% 92%;
+    --sidebar-ring: 0 0% 70%;
+  }
+
+  .dark {
+    --background: 0 0% 5%;
+    --foreground: 0 0% 95%;
+    --card: 0 0% 8%;
+    --card-foreground: 0 0% 95%;
+    --popover: 0 0% 8%;
+    --popover-foreground: 0 0% 95%;
+    --primary: 0 0% 90%;
+    --primary-foreground: 0 0% 10%;
+    --secondary: 0 0% 15%;
+    --secondary-foreground: 0 0% 90%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 60%;
+    --accent: 0 0% 18%;
+    --accent-foreground: 0 0% 90%;
+    --destructive: 0 65% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 18%;
+    --input: 0 0% 20%;
+    --ring: 0 0% 40%;
+    --sidebar-background: 0 0% 8%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 0 0% 90%;
+    --sidebar-primary-foreground: 0 0% 10%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 0 0% 90%;
+    --sidebar-border: 0 0% 18%;
+    --sidebar-ring: 0 0% 40%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  /* AIDEN Title - High Contrast Black */
+  .aiden-title {
+    @apply font-extralight tracking-[0.3em] uppercase text-foreground;
+  }
+
+  /* Invisible input with underline */
+  .input-invisible {
+    @apply bg-transparent border-0 border-b border-input rounded-none px-0 py-3;
+    @apply focus:border-foreground focus:ring-0 focus:outline-none;
+    @apply transition-all duration-300 ease-out;
+    @apply placeholder:text-muted-foreground text-foreground font-light;
+  }
+
+  .input-invisible:focus {
+    border-bottom-width: 2px;
+    border-color: hsl(var(--foreground));
+  }
+
+  /* Ghost button - outlined */
+  .btn-ghost-aiden {
+    @apply bg-transparent border border-foreground text-foreground;
+    @apply hover:bg-foreground hover:text-background;
+    @apply transition-all duration-300 ease-out;
+    @apply font-light tracking-wider;
+  }
+
+  /* Primary button - solid black */
+  .btn-primary-aiden {
+    @apply bg-foreground text-background border border-foreground;
+    @apply hover:bg-foreground/90;
+    @apply transition-all duration-300 ease-out;
+    @apply font-light tracking-wider;
+  }
+}
